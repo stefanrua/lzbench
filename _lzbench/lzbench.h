@@ -137,7 +137,7 @@ typedef struct
 
 
 
-#define LZBENCH_COMPRESSOR_COUNT 73
+#define LZBENCH_COMPRESSOR_COUNT 75
 
 static const compressor_desc_t comp_desc[LZBENCH_COMPRESSOR_COUNT] =
 {
@@ -147,6 +147,8 @@ static const compressor_desc_t comp_desc[LZBENCH_COMPRESSOR_COUNT] =
     { "brotli",     "1.0.9",       0,  11,    0,       0, lzbench_brotli_compress,     lzbench_brotli_decompress,     NULL,                    NULL },
     { "brotli22",   "1.0.9",       0,  11,   22,       0, lzbench_brotli_compress,     lzbench_brotli_decompress,     NULL,                    NULL },
     { "brotli24",   "1.0.9",       0,  11,   24,       0, lzbench_brotli_compress,     lzbench_brotli_decompress,     NULL,                    NULL },
+    { "bsc",        "3.2.4",       1,   6,    0,       0, lzbench_bsc_compress,        lzbench_bsc_decompress,        lzbench_bsc_init,        NULL },
+    { "bsc_cuda",   "3.2.4",       5,   8,    0,       0, lzbench_bsc_cuda_compress,   lzbench_bsc_cuda_decompress,   lzbench_bsc_cuda_init,   NULL },
     { "bzip2",      "1.0.8",       1,   9,    0,       0, lzbench_bzip2_compress,      lzbench_bzip2_decompress,      NULL,                    NULL },
     { "crush",      "1.0",         0,   2,    0,       0, lzbench_crush_compress,      lzbench_crush_decompress,      NULL,                    NULL },
     { "csc",        "2016-10-13",  1,   5,    0,       0, lzbench_csc_compress,        lzbench_csc_decompress,        NULL,                    NULL },
@@ -250,7 +252,7 @@ static const alias_desc_t alias_desc[LZBENCH_ALIASES_COUNT] =
     { "lzo1y", "lzo1y,1,999" },
     { "lzo",   "lzo1/lzo1a/lzo1b/lzo1c/lzo1f/lzo1x/lzo1y/lzo1z/lzo2a" },
     { "ucl",   "ucl_nrv2b/ucl_nrv2d/ucl_nrv2e" },
-    { "cuda",  "cudaMemcpy/nvcomp_lz4,0,1,3,5" },
+    { "cuda",  "cudaMemcpy/nvcomp_lz4,0,1,3,5/bsc_cuda,5,6,7,8" },
 };
 
 #endif
