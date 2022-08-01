@@ -234,6 +234,144 @@ int64_t lzbench_density_decompress(char *inbuf, size_t insize, char *outbuf, siz
 
 
 
+#ifdef BENCH_HAS_DIETGPU
+#include "dietgpu/dietgpu/ans/GpuANSCodec.h"
+#include "dietgpu/dietgpu/utils/StackDeviceMemory.h"
+#include "cudautils/cudaCheck.h"
+
+typedef struct {
+    // For compression
+    // ---------------
+    // Host array with addresses of device pointers comprising the input batch
+    // to compress
+    void* in_c_dgpu[1];
+    // Host array with sizes of batch members
+    uint32_t insize_c_dgpu[1];
+    // Optional (can be null): region in device memory of size 256 words
+    // containing pre-calculated symbol counts (histogram) of the data to be
+    // compressed
+    uint32_t* histogram_dev;
+    // Host array with addresses of device pointers for the compressed output
+    // arrays. Each out_c_dgpu[i] must be a region of memory of size at least
+    // getMaxCompressedSize(insize_c_dgpu[i])
+    void* out_c_dgpu[1];
+    // Device memory array of size numInBatch (optional)
+    // Provides the size of actual used memory in each output compressed batch
+    uint32_t* outsize_c_dgpu;
+
+    // For decompression
+    // -----------------
+    // Host array with addresses of device pointers corresponding to compressed
+    // inputs
+    void* in_d_dgpu[1];
+    // Host array with addresses of device pointers corresponding to
+    // uncompressed outputs
+    void* out_d_dgpu[1];
+    // Host array with size of memory regions provided in out; if the seen
+    // decompressed size is greater than this, then there will be an error in
+    // decompression
+    uint32_t outCapacity[1];
+    // Decode success/fail status (optional, can be nullptr)
+    // If present, this is a device pointer to an array of length numInBatch,
+    // with true/false for whether or not decompression status was successful
+    uint8_t* outSuccess_dev;
+    // Decode size status (optional, can be nullptr)
+    // If present, this is a device pointer to an array of length numInBatch,
+    // with either the size decompressed reported if successful, or the required
+    // size reported if our outPerBatchCapacity was insufficient
+    uint32_t* outsize_d_dgpu;
+
+    // For both
+    // --------
+    dietgpu::StackDeviceMemory res;
+    // Compression configuration
+    dietgpu::ANSCodecConfig config;
+    // Number of separate, independent compression problems
+    uint32_t numInBatch;
+    // Stream on the current device on which this runs
+    cudaStream_t stream;
+} dietgpu_params_s;
+
+char* lzbench_dietgpu_init(size_t insize, size_t level, size_t)
+{
+    dietgpu_params_s* dietgpu_params = (dietgpu_params_s*) malloc(sizeof(dietgpu_params_s));
+    dietgpu_params->histogram_dev = nullptr;
+    dietgpu_params->outCapacity[0] = insize;
+    dietgpu_params->outSuccess_dev = nullptr;
+
+    uint32_t maxsize = dietgpu::getMaxCompressedSize(insize);
+    int device = 0;
+    size_t allocPerDevice = maxsize;
+    new(&dietgpu_params->res) dietgpu::StackDeviceMemory(device, allocPerDevice);
+    dietgpu_params->config = dietgpu::ANSCodecConfig();
+    dietgpu_params->numInBatch = 1;
+
+    CUDA_CHECK(cudaStreamCreate(&dietgpu_params->stream));
+    CUDA_CHECK(cudaMalloc(& dietgpu_params->in_c_dgpu[0], insize));
+    CUDA_CHECK(cudaMalloc(& dietgpu_params->out_c_dgpu[0], maxsize));
+    CUDA_CHECK(cudaMalloc(& dietgpu_params->outsize_c_dgpu, sizeof(uint32_t)));
+    CUDA_CHECK(cudaMalloc(& dietgpu_params->in_d_dgpu[0], maxsize));
+    CUDA_CHECK(cudaMalloc(& dietgpu_params->out_d_dgpu[0], insize));
+    CUDA_CHECK(cudaMalloc(& dietgpu_params->outsize_d_dgpu, sizeof(uint32_t)));
+
+    return (char*) dietgpu_params;
+}
+
+void lzbench_dietgpu_deinit(char* params)
+{
+    dietgpu_params_s* dietgpu_params = (dietgpu_params_s*) params;
+    dietgpu_params->res.~StackDeviceMemory();
+    CUDA_CHECK(cudaFree(dietgpu_params->in_c_dgpu[0]));
+    CUDA_CHECK(cudaFree(dietgpu_params->out_c_dgpu[0]));
+    CUDA_CHECK(cudaFree(dietgpu_params->outsize_c_dgpu));
+    CUDA_CHECK(cudaFree(dietgpu_params->in_d_dgpu[0]));
+    CUDA_CHECK(cudaFree(dietgpu_params->out_d_dgpu[0]));
+    CUDA_CHECK(cudaFree(dietgpu_params->outsize_d_dgpu));
+}
+
+int64_t lzbench_dietgpu_compress(char *inbuf, size_t insize, char *outbuf, size_t outsize, size_t level, size_t, char* params)
+{
+    dietgpu_params_s* dietgpu_params = (dietgpu_params_s*) params;
+    dietgpu_params->insize_c_dgpu[0] = insize;
+    CUDA_CHECK(cudaMemcpy(dietgpu_params->in_c_dgpu[0], inbuf, insize, cudaMemcpyHostToDevice));
+    dietgpu::ansEncodeBatchPointer(
+            dietgpu_params->res,
+            dietgpu_params->config,
+            dietgpu_params->numInBatch,
+            (const void**)dietgpu_params->in_c_dgpu,
+            dietgpu_params->insize_c_dgpu,
+            dietgpu_params->histogram_dev,
+            dietgpu_params->out_c_dgpu,
+            dietgpu_params->outsize_c_dgpu,
+            dietgpu_params->stream);
+    CUDA_CHECK(cudaMemcpy(&outsize, dietgpu_params->outsize_c_dgpu, sizeof(uint32_t), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(outbuf, dietgpu_params->out_c_dgpu[0], outsize, cudaMemcpyDeviceToHost));
+    return outsize;
+}
+
+int64_t lzbench_dietgpu_decompress(char *inbuf, size_t insize, char *outbuf, size_t outsize, size_t, size_t, char* params)
+{
+    dietgpu_params_s* dietgpu_params = (dietgpu_params_s*) params;
+    CUDA_CHECK(cudaMemcpy(dietgpu_params->in_d_dgpu[0], inbuf, insize, cudaMemcpyHostToDevice));
+    dietgpu::ansDecodeBatchPointer(
+            dietgpu_params->res,
+            dietgpu_params->config,
+            dietgpu_params->numInBatch,
+            (const void**)dietgpu_params->in_d_dgpu,
+            dietgpu_params->out_d_dgpu,
+            dietgpu_params->outCapacity,
+            dietgpu_params->outSuccess_dev,
+            dietgpu_params->outsize_d_dgpu,
+            dietgpu_params->stream);
+    CUDA_CHECK(cudaMemcpy(&outsize, dietgpu_params->outsize_d_dgpu, sizeof(uint32_t), cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(outbuf, dietgpu_params->out_d_dgpu[0], outsize, cudaMemcpyDeviceToHost));
+    return outsize;
+}
+
+#endif // BENCH_HAS_DIETGPU
+
+
+
 #ifndef BENCH_REMOVE_FASTLZ
 extern "C"
 {
