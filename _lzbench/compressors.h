@@ -529,4 +529,16 @@ int64_t lzbench_return_0(char *inbuf, size_t insize, char *outbuf, size_t outsiz
         #define lzbench_nvcomp_decompress NULL
 #endif
 
+#ifndef BENCH_REMOVE_DIETGPU
+        char* lzbench_dietgpu_init(size_t insize, size_t level, size_t);
+        void lzbench_dietgpu_deinit(char* workmem);
+        int64_t lzbench_dietgpu_compress(char *inbuf, size_t insize, char *outbuf, size_t outsize, size_t level, size_t, char* workmem);
+        int64_t lzbench_dietgpu_decompress(char *inbuf, size_t insize, char *outbuf, size_t outsize, size_t, size_t, char* workmem);
+#else
+        #define lzbench_dietgpu_init NULL
+        #define lzbench_dietgpu_deinit NULL
+        #define lzbench_dietgpu_compress NULL
+        #define lzbench_dietgpu_decompress NULL
+#endif
+
 #endif // LZBENCH_COMPRESSORS_H
