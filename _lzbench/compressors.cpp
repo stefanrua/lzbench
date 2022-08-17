@@ -167,7 +167,7 @@ int64_t lzbench_density_decompress(char *inbuf, size_t insize, char *outbuf, siz
 
 
 
-#ifndef BENCH_REMOVE_DIETGPU
+#ifdef BENCH_HAS_DIETGPU
 #include "dietgpu/dietgpu/ans/GpuANSCodec.h"
 #include "dietgpu/dietgpu/utils/StackDeviceMemory.h"
 #include "cudautils/cudaCheck.h"
@@ -301,7 +301,7 @@ int64_t lzbench_dietgpu_decompress(char *inbuf, size_t insize, char *outbuf, siz
     return outsize;
 }
 
-#endif // BENCH_REMOVE_DIETGPU
+#endif // BENCH_HAS_DIETGPU
 
 
 

@@ -181,14 +181,6 @@ MISC_FILES += lzlib/lzlib.o blosclz/blosclz.o blosclz/fastcopy.o slz/slz.o
 
 LZBENCH_FILES = _lzbench/lzbench.o _lzbench/compressors.o _lzbench/csc_codec.o
 
-ifeq "$(DONT_BUILD_DIETGPU)" "1"
-    DEFINES += -DBENCH_REMOVE_DIETGPU
-else
-    LDFLAGS += -Ldietgpu/build/lib -lgpu_ans -ldietgpu_utils
-    DEFINES += -Idietgpu/third_party/glog/build -Idietgpu/third_party/glog/src -Idietgpu/build/third_party/glog -Idietgpu/
-    DIETGPU_FILES = dietgpu/build/lib/libgpu_ans.so dietgpu/build/lib/libdietgpu_utils.so
-endif
-
 ifeq "$(DONT_BUILD_BZIP2)" "1"
     DEFINES += -DBENCH_REMOVE_BZIP2
 else
@@ -316,6 +308,43 @@ ifneq "$(DONT_BUILD_NVCOMP)" "1"
     NVCOMP_CU_OBJ  = $(NVCOMP_CU_SRC:%=%.o)
     NVCOMP_FILES   = $(NVCOMP_CU_OBJ) $(NVCOMP_CPP_OBJ)
 endif
+ifeq "$(DONT_BUILD_DIETGPU)" "1"
+    DEFINES += -DBENCH_HAS_DIETGPU
+else
+    DEFINES += -Idietgpu -Idietgpu/build/third_party/glog -Idietgpu/third_party/glog/src
+    DIETGPU_FILES_CUDA  = dietgpu/dietgpu/ans/GpuANSDecode.o
+    DIETGPU_FILES_CUDA += dietgpu/dietgpu/ans/GpuANSInfo.o
+    DIETGPU_FILES_CUDA += dietgpu/dietgpu/ans/GpuANSEncode.o
+    #DIETGPU_FILES_CUDA += dietgpu/dietgpu/ans/ANSStatisticsTest.cu
+    #DIETGPU_FILES_CUDA += dietgpu/dietgpu/ans/ANSTest.cu
+    #DIETGPU_FILES_CUDA += dietgpu/dietgpu/ans/BatchPrefixSumTest.cu
+    DIETGPU_FILES  = dietgpu/dietgpu/utils/StackDeviceMemory.o
+    DIETGPU_FILES += dietgpu/dietgpu/utils/DeviceUtils.o
+    DIETGPU_FILES_GLOG  = dietgpu/third_party/glog/src/utilities_unittest.o
+    DIETGPU_FILES_GLOG += dietgpu/third_party/glog/src/logging_unittest.o
+    DIETGPU_FILES_GLOG += dietgpu/third_party/glog/src/vlog_is_on.o
+    DIETGPU_FILES_GLOG += dietgpu/third_party/glog/src/cleanup_with_relative_prefix_unittest.o
+    DIETGPU_FILES_GLOG += dietgpu/third_party/glog/src/logging.o
+    DIETGPU_FILES_GLOG += dietgpu/third_party/glog/src/logging_striptest10.o
+    DIETGPU_FILES_GLOG += dietgpu/third_party/glog/src/demangle.o
+    DIETGPU_FILES_GLOG += dietgpu/third_party/glog/src/symbolize_unittest.o
+    DIETGPU_FILES_GLOG += dietgpu/third_party/glog/src/demangle_unittest.o
+    DIETGPU_FILES_GLOG += dietgpu/third_party/glog/src/logging_custom_prefix_unittest.o
+    DIETGPU_FILES_GLOG += dietgpu/third_party/glog/src/cleanup_with_absolute_prefix_unittest.o
+    DIETGPU_FILES_GLOG += dietgpu/third_party/glog/src/cleanup_immediately_unittest.o
+    DIETGPU_FILES_GLOG += dietgpu/third_party/glog/src/symbolize.o
+    DIETGPU_FILES_GLOG += dietgpu/third_party/glog/src/logging_striptest2.o
+    DIETGPU_FILES_GLOG += dietgpu/third_party/glog/src/mock-log_unittest.o
+    DIETGPU_FILES_GLOG += dietgpu/third_party/glog/src/raw_logging.o
+    DIETGPU_FILES_GLOG += dietgpu/third_party/glog/src/stl_logging_unittest.o
+    DIETGPU_FILES_GLOG += dietgpu/third_party/glog/src/windows/port.o
+    DIETGPU_FILES_GLOG += dietgpu/third_party/glog/src/signalhandler_unittest.o
+    DIETGPU_FILES_GLOG += dietgpu/third_party/glog/src/signalhandler.o
+    DIETGPU_FILES_GLOG += dietgpu/third_party/glog/src/package_config_unittest/working_config/glog_package_config.o
+    DIETGPU_FILES_GLOG += dietgpu/third_party/glog/src/utilities.o
+    DIETGPU_FILES_GLOG += dietgpu/third_party/glog/src/logging_striptest_main.o
+    DIETGPU_FILES_GLOG += dietgpu/third_party/glog/src/stacktrace_unittest.o
+endif
 endif
 
 all: lzbench
@@ -355,12 +384,9 @@ $(NVCOMP_CPP_OBJ): %.cpp.o: %.cpp
 	@$(MKDIR) $(dir $@)
 	$(CXX) $(CFLAGS) -c $< -o $@
 
-# This fails, but it is intended - we only need the ANS codec library,
-# not the PyTorch stuff.
-$(DIETGPU_FILES):
-	-mkdir dietgpu/build
-	-cd dietgpu/build; cmake -DCMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc ..
-	-cd dietgpu/build; cmake --build . --target all
+$(DIETGPU_FILES_CUDA): %.o: %.cu
+	@$(MKDIR) $(dir $@)
+	$(CUDA_CC) $(CUDA_CFLAGS) $(CFLAGS) -c $< -o $@
 
 # disable the implicit rule for making a binary out of a single object file
 %: %.o
@@ -368,7 +394,7 @@ $(DIETGPU_FILES):
 
 _lzbench/lzbench.o: _lzbench/lzbench.cpp _lzbench/lzbench.h
 
-lzbench: $(BZIP2_FILES) $(DENSITY_FILES) $(FASTLZMA2_OBJ) $(ZSTD_FILES) $(GLZA_FILES) $(LZSSE_FILES) $(LZFSE_FILES) $(XPACK_FILES) $(GIPFELI_FILES) $(XZ_FILES) $(LIBLZG_FILES) $(BRIEFLZ_FILES) $(LZF_FILES) $(LZRW_FILES) $(BROTLI_FILES) $(CSC_FILES) $(LZMA_FILES) $(ZLING_FILES) $(QUICKLZ_FILES) $(SNAPPY_FILES) $(ZLIB_FILES) $(LZHAM_FILES) $(LZO_FILES) $(UCL_FILES) $(LZMAT_FILES) $(LZ4_FILES) $(LIBDEFLATE_FILES) $(MISC_FILES) $(NVCOMP_FILES) $(DIETGPU_FILES) $(LZBENCH_FILES)
+lzbench: $(DIETGPU_FILES) $(DIETGPU_FILES_CUDA) $(DIETGPU_FILES_GLOG) $(BZIP2_FILES) $(DENSITY_FILES) $(FASTLZMA2_OBJ) $(ZSTD_FILES) $(GLZA_FILES) $(LZSSE_FILES) $(LZFSE_FILES) $(XPACK_FILES) $(GIPFELI_FILES) $(XZ_FILES) $(LIBLZG_FILES) $(BRIEFLZ_FILES) $(LZF_FILES) $(LZRW_FILES) $(BROTLI_FILES) $(CSC_FILES) $(LZMA_FILES) $(ZLING_FILES) $(QUICKLZ_FILES) $(SNAPPY_FILES) $(ZLIB_FILES) $(LZHAM_FILES) $(LZO_FILES) $(UCL_FILES) $(LZMAT_FILES) $(LZ4_FILES) $(LIBDEFLATE_FILES) $(MISC_FILES) $(NVCOMP_FILES) $(LZBENCH_FILES)
 	$(CXX) $^ -o $@ $(LDFLAGS)
 	@echo Linked GCC_VERSION=$(GCC_VERSION) CLANG_VERSION=$(CLANG_VERSION) COMPILER=$(COMPILER)
 
@@ -385,4 +411,4 @@ lzbench: $(BZIP2_FILES) $(DENSITY_FILES) $(FASTLZMA2_OBJ) $(ZSTD_FILES) $(GLZA_F
 	$(CXX) $(CFLAGS) $< -c -o $@
 
 clean:
-	rm -rf lzbench lzbench.exe *.o _lzbench/*.o bzip2/*.o fast-lzma2/*.o slz/*.o zstd/lib/*.o zstd/lib/*.a zstd/lib/common/*.o zstd/lib/compress/*.o zstd/lib/decompress/*.o zstd/lib/dictBuilder/*.o lzsse/lzsse2/*.o lzsse/lzsse4/*.o lzsse/lzsse8/*.o lzfse/*.o xpack/lib/*.o blosclz/*.o gipfeli/*.o xz/*.o xz/common/*.o xz/check/*.o xz/lzma/*.o xz/lz/*.o xz/rangecoder/*.o liblzg/*.o lzlib/*.o brieflz/*.o brotli/common/*.o brotli/enc/*.o brotli/dec/*.o libcsc/*.o wflz/*.o lzjb/*.o lzma/*.o density/buffers/*.o density/algorithms/*.o density/algorithms/cheetah/core/*.o density/algorithms/*.o density/algorithms/lion/forms/*.o density/algorithms/lion/core/*.o density/algorithms/chameleon/core/*.o density/*.o density/structure/*.o pithy/*.o glza/*.o libzling/*.o yappy/*.o shrinker/*.o fastlz/*.o ucl/*.o zlib/*.o lzham/*.o lzmat/*.o lizard/*.o lz4/*.o crush/*.o lzf/*.o lzrw/*.o lzo/*.o snappy/*.o quicklz/*.o tornado/*.o libdeflate/lib/*.o libdeflate/lib/x86/*.o libdeflate/lib/arm/*.o nakamichi/*.o nvcomp/*.o dietgpu/build
+	rm -rf lzbench lzbench.exe *.o _lzbench/*.o bzip2/*.o fast-lzma2/*.o slz/*.o zstd/lib/*.o zstd/lib/*.a zstd/lib/common/*.o zstd/lib/compress/*.o zstd/lib/decompress/*.o zstd/lib/dictBuilder/*.o lzsse/lzsse2/*.o lzsse/lzsse4/*.o lzsse/lzsse8/*.o lzfse/*.o xpack/lib/*.o blosclz/*.o gipfeli/*.o xz/*.o xz/common/*.o xz/check/*.o xz/lzma/*.o xz/lz/*.o xz/rangecoder/*.o liblzg/*.o lzlib/*.o brieflz/*.o brotli/common/*.o brotli/enc/*.o brotli/dec/*.o libcsc/*.o wflz/*.o lzjb/*.o lzma/*.o density/buffers/*.o density/algorithms/*.o density/algorithms/cheetah/core/*.o density/algorithms/*.o density/algorithms/lion/forms/*.o density/algorithms/lion/core/*.o density/algorithms/chameleon/core/*.o density/*.o density/structure/*.o pithy/*.o glza/*.o libzling/*.o yappy/*.o shrinker/*.o fastlz/*.o ucl/*.o zlib/*.o lzham/*.o lzmat/*.o lizard/*.o lz4/*.o crush/*.o lzf/*.o lzrw/*.o lzo/*.o snappy/*.o quicklz/*.o tornado/*.o libdeflate/lib/*.o libdeflate/lib/x86/*.o libdeflate/lib/arm/*.o nakamichi/*.o nvcomp/*.o dietgpu/dietgpu/ans/*.o dietgpu/dietgpu/utils/*.o dietgpu/third_party/glog/src/*.o
