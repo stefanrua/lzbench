@@ -129,6 +129,118 @@ int64_t lzbench_crush_decompress(char *inbuf, size_t insize, char *outbuf, size_
 
 
 
+#ifndef BENCH_REMOVE_CULZSS
+extern "C"
+{
+    #include <pthread.h>
+    #include <stdio.h>
+    #include <unistd.h>
+    #include <stdlib.h>
+    #include "culzss.h"
+    //#include <sys/time.h>
+    #include <string.h>
+    #include <signal.h>
+    #include "getopt.h"
+    #include "decompression.h"
+    #define CULZSS_MINSIZE 65536
+    #define CULZSS_BUFSIZE 1048576
+}
+
+/*
+ * The contents of these functions are pretty much just copied from
+ * culzss/main.c at this point
+ */
+
+char* lzbench_culzss_init(size_t insize, size_t level, size_t)
+{
+}
+
+int64_t lzbench_culzss_compress(char *inbuf, size_t insize, char *outbuf, size_t outsize, size_t level, size_t, char*)
+{
+    long totalsize = (long)insize;
+
+    maxiters = totalsize / buffersize + (((totalsize % buffersize) > 0)?1:0);
+    padding = totalsize % buffersize;
+    padding = (padding)?(buffersize-padding):0;
+    blsize = buffersize;
+	
+	bookkeeping = (unsigned int * )malloc(sizeof(int)*(maxiters+2)); //# of blocks, each block size, padding size 
+	bookkeeping[0] = maxiters;
+	bookkeeping[1] = padding;
+	
+	pthread_t pro;
+	
+	fifo = queueInit (maxiters,numbls,blsize);
+	if (fifo ==  NULL) {
+		fprintf (stderr, "main: Queue Init failed.\n");
+		exit (1);
+	}	
+	
+	//init compression threads
+	init_compression(fifo,maxiters,numbls,blsize,outputfilename,bookkeeping);
+
+	//create producer
+	pthread_create (&pro, NULL, producer, fifo);
+
+	//join all 
+	join_comp_threads();
+	//join producer
+	pthread_join (pro, NULL);
+	queueDelete (fifo);
+
+	int sizeinmb= totalsize / (1024*1024);
+
+	free(bookkeeping);
+	//exit
+	return 0;
+}
+
+int64_t lzbench_culzss_decompress(char *inbuf, size_t insize, char *outbuf, size_t outsize, size_t, size_t, char*)
+{
+	int padding=0;  	
+	inputfile = filename;  
+	outfile = outfilename;  
+	bufsize = size;
+
+    FILE *inFile;//, *outFile, *decFile;  /* input & output files */
+	if ((inFile = fopen(inputfile, "rb")) == NULL)
+	{
+		printf ("Memory error, temp"); exit (2);
+	}
+	
+	fread (&numbufs,sizeof(unsigned int), 1,inFile);
+	fread (&padding,sizeof(unsigned int), 1,inFile);
+	fclose(inFile);
+	
+	pthread_t rce;
+	
+	fifo = dequeueInit (bufsize,numbufs,padding);
+	if (fifo ==  NULL) {
+		fprintf (stderr, "main: Queue Init failed.\n");
+		exit (1);
+	}		
+
+	//init compression threads
+	init_decompression(fifo,outfile);
+	
+	//create receiver
+	pthread_create (&rce, NULL, receiver, fifo);
+	//start producing
+	//and start signaling as we go 
+
+	//join all 
+	join_decomp_threads();
+	//join receiver
+	pthread_join (rce, NULL);
+	
+	dequeueDelete (fifo);
+}
+
+#endif // BENCH_REMOVE_CULZSS
+
+
+
+
 #ifndef BENCH_REMOVE_DENSITY
 extern "C"
 {

@@ -137,7 +137,7 @@ typedef struct
 
 
 
-#define LZBENCH_COMPRESSOR_COUNT 73
+#define LZBENCH_COMPRESSOR_COUNT 74
 
 static const compressor_desc_t comp_desc[LZBENCH_COMPRESSOR_COUNT] =
 {
@@ -150,6 +150,7 @@ static const compressor_desc_t comp_desc[LZBENCH_COMPRESSOR_COUNT] =
     { "bzip2",      "1.0.8",       1,   9,    0,       0, lzbench_bzip2_compress,      lzbench_bzip2_decompress,      NULL,                    NULL },
     { "crush",      "1.0",         0,   2,    0,       0, lzbench_crush_compress,      lzbench_crush_decompress,      NULL,                    NULL },
     { "csc",        "2016-10-13",  1,   5,    0,       0, lzbench_csc_compress,        lzbench_csc_decompress,        NULL,                    NULL },
+    { "culzss",     "",            0,   0,    0,       0, lzbench_culzss_compress,     lzbench_culzss_decompress,     lzbench_cuzss_init,      NULL },
     { "density",    "0.14.2",      1,   3,    0,       0, lzbench_density_compress,    lzbench_density_decompress,    lzbench_density_init,    lzbench_density_deinit },
     { "fastlz",     "0.5.0",       1,   2,    0,       0, lzbench_fastlz_compress,     lzbench_fastlz_decompress,     NULL,                    NULL },
     { "fastlzma2",   "1.0.1",      1,  10,    0,       0, lzbench_fastlzma2_compress,  lzbench_fastlzma2_decompress,  NULL,                    NULL },
@@ -250,7 +251,7 @@ static const alias_desc_t alias_desc[LZBENCH_ALIASES_COUNT] =
     { "lzo1y", "lzo1y,1,999" },
     { "lzo",   "lzo1/lzo1a/lzo1b/lzo1c/lzo1f/lzo1x/lzo1y/lzo1z/lzo2a" },
     { "ucl",   "ucl_nrv2b/ucl_nrv2d/ucl_nrv2e" },
-    { "cuda",  "cudaMemcpy/nvcomp_lz4,0,1,3,5" },
+    { "cuda",  "cudaMemcpy/nvcomp_lz4,0,1,3,5/culzss" },
 };
 
 #endif

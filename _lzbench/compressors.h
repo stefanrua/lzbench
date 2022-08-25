@@ -67,6 +67,17 @@ int64_t lzbench_return_0(char *inbuf, size_t insize, char *outbuf, size_t outsiz
 #endif
 
 
+#ifdef BENCH_HAS_CULZSS
+    char*   lzbench_culzss_init(size_t insize, size_t level, size_t);
+	int64_t lzbench_culzss_compress(char *inbuf, size_t insize, char *outbuf, size_t outsize, size_t level, size_t, char*);
+	int64_t lzbench_culzss_decompress(char *inbuf, size_t insize, char *outbuf, size_t outsize, size_t, size_t, char*);
+#else
+	#define lzbench_culzss_init NULL
+	#define lzbench_culzss_compress NULL
+	#define lzbench_culzss_decompress NULL
+#endif
+
+
 #ifndef BENCH_REMOVE_DENSITY
 	char*   lzbench_density_init(size_t insize, size_t level, size_t);
 	void    lzbench_density_deinit(char* workmem);
